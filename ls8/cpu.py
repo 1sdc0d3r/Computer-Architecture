@@ -1,11 +1,23 @@
 """CPU functionality."""
 
 import sys
+import glob
+
+# path = './'
+
+# files = [f for f in glob.glob(path + "**/", recursive=True)]
+# for f in files:
+#     print(f)
 
 INC = 0b01100101  # reg += 1 (increment)
 LDI = 0b10000010  # reg = int (register immediate)
 PRN = 0b01000111  # print(reg)
 HLT = 0b00000001  # halt
+
+ADD = 0b10100000
+SUB = 0b10100001
+MUL = 0b10100010
+DIV = 0b10100011
 
 
 class CPU:
@@ -13,7 +25,7 @@ class CPU:
 
     def __init__(self):
         """Construct a new CPU."""
-        self.ram = [0]*8
+        self.ram = [0]*256
         self.reg = [0]*8  # general-purpose registers
         self.pc = 0  # program counter
         self.mar = None  # Memory address register where reading/writing
@@ -25,45 +37,75 @@ class CPU:
         self.pc += 3
 
     def ram_read(self, address=False):
-        if address.exists() is not False:
+        if address is not False:
             print(self.ram[address])
         else:
             print(self.ram)
 
     def load(self):
         """Load a program into memory."""
+        basePath = './examples/'
+        file = "print8.ls8"
+        if len(sys.argv) > 1:
+            file = sys.argv[1]
         address = 0
         # For now, we've just hardcoded a program:
-        program = [
-            # From print8.ls8
-            0b10000010,  # LDI R0,8
-            0b00000000,
-            0b00001000,
-            0b01000111,  # PRN R0
-            0b00000000,
-            0b00000001,  # HLT
-        ]
-        for instruction in program:
-            self.ram[address] = instruction
-            address += 1
+        # program = [
+        #     # From print8.ls8
+        #     0b10000010,  # LDI R0,8
+        #     0b00000000,
+        #     0b00001000,
+        #     0b01000111,  # PRN R0
+        #     0b00000000,
+        #     0b00000001,  # HLT
+        # ]
+        # for instruction in program:
+        #     self.ram[address] = instruction
+        #     address += 1
 
-    def alu(self, op, reg_a, reg_b):
+        with open(basePath + file, "r") as f:
+            for line in f:
+                line = line.split("#")
+
+                try:
+                    v = int(line[0], 2)
+                except ValueError:
+                    continue
+                # print(v)
+                self.ram[address] = v
+                address += 1
+
+    def alu(self, op=None, reg_a=None, reg_b=None):
         """ALU operations."""
+        op = self.ram[self.pc]
+        reg_a = self.ram[self.pc + 1]
+        reg_b = self.ram[self.pc + 2]
 
-        if op == "ADD":
+        def ADDf():
             self.reg[reg_a] += self.reg[reg_b]
-            print(self.reg[reg_a])
-        elif op == "SUB":
+
+        def SUBf():
             self.reg[reg_a] -= self.reg[reg_b]
-            print(self.reg[reg_a])
-        elif op == "MULT":
+
+        def MULf():
             self.reg[reg_a] *= self.reg[reg_b]
-            print(self.reg[reg_a])
-        elif op == "DIV":
+
+        def DIVf():
             self.reg[reg_a] /= self.reg[reg_b]
-            print(self.reg[reg_a])
+
+        branch_table = {
+            ADD: ADDf,
+            SUB: SUBf,
+            MUL: MULf,
+            DIV: DIVf
+        }
+
+        if op in branch_table:
+            branch_table[op]()
+            self.pc += 3
         else:
-            raise Exception("Unsupported ALU operation")
+            raise Exception(
+                f"Unsupported ALU operation {op} on pc-{self.pc} at address {reg_a} and {reg_b}")
 
     def trace(self):
         """
@@ -83,7 +125,7 @@ class CPU:
         for i in range(8):
             print(" %02X" % self.reg[i], end='')
 
-        print()
+        # print()
 
     def run(self):
         """Run the CPU."""
@@ -91,27 +133,44 @@ class CPU:
         while running:
             ir = self.ram[self.pc]  # instruction register, copy
             # print(f"pc-{self.pc} ir-{ir}")
-            if ir == LDI:
+
+            def LDIf():
                 self.mar = self.ram[self.pc+1]
                 self.mdr = self.ram[self.pc+2]
                 self.reg[self.mar] = self.mdr
                 self.pc += 3
 
-            elif ir == PRN:
+            def PRNf():
                 self.mar = self.ram[self.pc+1]
                 self.mdr = self.reg[self.mar]
                 print(self.mdr)
                 self.pc += 2
 
-            elif ir == HLT:
-                running = False
+            def HLTf():
                 self.pc += 1
+                sys.exit(0)
+
+            branch_table = {
+                LDI: LDIf,
+                PRN: PRNf,
+                HLT: HLTf,
+                ADD: self.alu,
+                SUB: self.alu,
+                MUL: self.alu,
+                DIV: self.alu
+            }
+
+            if ir in branch_table:
+                branch_table[ir]()
             else:
-                print(f'Unknown instruction {ir} at address {self.mar}')
+                print(cpu.reg)
+
+                print(
+                    f'Unknown instruction {ir} on pc-{self.pc} at address {self.mar}')
                 sys.exit(1)
 
 
 cpu = CPU()
 cpu.load()
+# cpu.ram_read()
 cpu.run()
-cpu.alu("MULT", 0, 3)
