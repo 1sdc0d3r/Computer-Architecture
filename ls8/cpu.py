@@ -23,6 +23,7 @@ ADD = 0b10100000
 SUB = 0b10100001
 MUL = 0b10100010
 DIV = 0b10100011
+CMP = 0b10100111
 
 
 class CPU:
@@ -40,7 +41,10 @@ class CPU:
         self.pc = 0  # program counter
         self.mar = None  # Memory address register where reading/writing
         self.mdr = None  # Memory Data Register holds value to write/read
-        self.fl = []  # holds current flags
+        self.fl = {}  # holds current flags
+        self.fl["E"] = 0
+        self.fl["L"] = 0
+        self.fl["G"] = 0
         """Interput Vector Table"""
         self.ram[int("FF", 16)] = "I7"
         self.ram[int("FE", 16)] = "I6"
@@ -102,6 +106,16 @@ class CPU:
         op = self.ram_read(self.pc)
         reg_a = self.ram_read(self.pc + 1)
         reg_b = self.ram_read(self.pc + 2)
+
+        self.fl["L"] = 0
+        self.fl["E"] = 0
+        self.fl["G"] = 0
+        if reg_a < reg_b:
+            self.fl["L"] = 1
+        elif reg_a == reg_b:
+            self.fl["E"] = 1
+        else:
+            self.fl["G"] = 1
 
         def ADD_handler():
             self.reg[reg_a] += self.reg[reg_b]
