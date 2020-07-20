@@ -13,6 +13,8 @@ INC = 0b01100101  # reg += 1 (increment)
 LDI = 0b10000010  # reg = int (register immediate)
 PRN = 0b01000111  # print(reg)
 HLT = 0b00000001  # halt
+PUSH = 0b01000101
+POP = 0b01000110
 
 ADD = 0b10100000
 SUB = 0b10100001
@@ -27,9 +29,14 @@ class CPU:
         """Construct a new CPU."""
         self.ram = [0]*256
         self.reg = [0]*8  # general-purpose registers
+        # R5 reserved for interrupt mask (IM)
+        # R6 reserved for interrupt status(IS)
+        # R7 reserved for stack pointer(SP)
+        self.reg[7] = int("F4", 16)
+        self.sp = self.reg[7]  # Stack Pointer
         self.pc = 0  # program counter
         self.mar = None  # Memory address register where reading/writing
-        self.mdr = None  # holds value to write/read
+        self.mdr = None  # Memory Data Register holds value to write/read
         self.fl = []  # holds current flags
         self.dispatch_table = {}
         self.dispatch_table[LDI] = self.handle_LDI
@@ -39,6 +46,8 @@ class CPU:
         self.dispatch_table[SUB] = self.alu
         self.dispatch_table[MUL] = self.alu
         self.dispatch_table[DIV] = self.alu
+        self.dispatch_table[PUSH] = self.handle_PUSH
+        self.dispatch_table[POP] = self.handle_POP
 
     def ram_write(self, address, value):
         self.ram[address] = value
@@ -54,6 +63,8 @@ class CPU:
         """Load a program into memory."""
         basePath = './examples/'
         file = "print8.ls8"
+        file = "mult.ls8"
+        # file = "stack.ls8"
         if len(sys.argv) > 1:
             file = sys.argv[1]
         address = 0
@@ -120,7 +131,20 @@ class CPU:
         for i in range(8):
             print(" %02X" % self.reg[i], end='')
 
-        # print()
+    def handle_PUSH(self):
+        self.sp -= 1
+        self.mar = self.sp
+        self.mdr = self.reg[self.ram[self.pc+1]]
+        self.ram[self.mar] = self.mdr
+        self.pc += 2
+
+    def handle_POP(self):
+        self.mar = self.ram[self.pc+1]
+        self.mdr = self.ram[self.sp]
+        self.reg[self.mar] = self.mdr
+        self.sp += 1
+        self.pc += 2
+
     def handle_LDI(self):
         # self.mar = self.r[self.pc+1]
         self.mar = self.ram_read(self.pc+1)
@@ -131,11 +155,12 @@ class CPU:
     def handle_PRN(self):
         self.mar = self.ram_read(self.pc+1)
         self.mdr = self.reg[self.mar]
-        print(self.mdr)
+        # print(self.mdr)
         self.pc += 2
 
     def handle_HLT(self):
         self.pc += 1
+        print(self.ram_read())
         sys.exit(0)
 
     def run(self):
@@ -156,6 +181,8 @@ class CPU:
                 self.dispatch_table[ir]()
             elif ir in [ADD, SUB, MUL, DIV]:
                 print(ir, True)
+                # ? Should you have this elif or have the OPERATORS in the dispatch table?
+                self.alu()
             else:
                 print(cpu.reg)
 
@@ -166,5 +193,8 @@ class CPU:
 
 cpu = CPU()
 cpu.load()
-# cpu.ram_read()
+# print(cpu.sp)
+# cpu.sp -= 1
+# print(cpu.sp)
 cpu.run()
+# print(cpu.ram_read())
