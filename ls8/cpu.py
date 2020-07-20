@@ -31,6 +31,14 @@ class CPU:
         self.mar = None  # Memory address register where reading/writing
         self.mdr = None  # holds value to write/read
         self.fl = []  # holds current flags
+        self.dispatch_table = {}
+        self.dispatch_table[LDI] = self.handle_LDI
+        self.dispatch_table[PRN] = self.handle_PRN
+        self.dispatch_table[HLT] = self.handle_HLT
+        self.dispatch_table[ADD] = self.alu
+        self.dispatch_table[SUB] = self.alu
+        self.dispatch_table[MUL] = self.alu
+        self.dispatch_table[DIV] = self.alu
 
     def ram_write(self, address, value):
         self.ram[address] = value
@@ -38,9 +46,9 @@ class CPU:
 
     def ram_read(self, address=False):
         if address is not False:
-            print(self.ram[address])
+            return self.ram[address]
         else:
-            print(self.ram)
+            return self.ram
 
     def load(self):
         """Load a program into memory."""
@@ -49,19 +57,6 @@ class CPU:
         if len(sys.argv) > 1:
             file = sys.argv[1]
         address = 0
-        # For now, we've just hardcoded a program:
-        # program = [
-        #     # From print8.ls8
-        #     0b10000010,  # LDI R0,8
-        #     0b00000000,
-        #     0b00001000,
-        #     0b01000111,  # PRN R0
-        #     0b00000000,
-        #     0b00000001,  # HLT
-        # ]
-        # for instruction in program:
-        #     self.ram[address] = instruction
-        #     address += 1
 
         with open(basePath + file, "r") as f:
             for line in f:
@@ -77,27 +72,27 @@ class CPU:
 
     def alu(self, op=None, reg_a=None, reg_b=None):
         """ALU operations."""
-        op = self.ram[self.pc]
-        reg_a = self.ram[self.pc + 1]
-        reg_b = self.ram[self.pc + 2]
+        op = self.ram_read(self.pc)
+        reg_a = self.ram_read(self.pc + 1)
+        reg_b = self.ram_read(self.pc + 2)
 
-        def ADDf():
+        def ADD_handler():
             self.reg[reg_a] += self.reg[reg_b]
 
-        def SUBf():
+        def SUB_handler():
             self.reg[reg_a] -= self.reg[reg_b]
 
-        def MULf():
+        def MUL_handler():
             self.reg[reg_a] *= self.reg[reg_b]
 
-        def DIVf():
+        def DIV_handler():
             self.reg[reg_a] /= self.reg[reg_b]
 
         branch_table = {
-            ADD: ADDf,
-            SUB: SUBf,
-            MUL: MULf,
-            DIV: DIVf
+            ADD: ADD_handler,
+            SUB: SUB_handler,
+            MUL: MUL_handler,
+            DIV: DIV_handler
         }
 
         if op in branch_table:
@@ -126,42 +121,41 @@ class CPU:
             print(" %02X" % self.reg[i], end='')
 
         # print()
+    def handle_LDI(self):
+        # self.mar = self.r[self.pc+1]
+        self.mar = self.ram_read(self.pc+1)
+        self.mdr = self.ram_read(self.pc+2)
+        self.reg[self.mar] = self.mdr
+        self.pc += 3
+
+    def handle_PRN(self):
+        self.mar = self.ram_read(self.pc+1)
+        self.mdr = self.reg[self.mar]
+        print(self.mdr)
+        self.pc += 2
+
+    def handle_HLT(self):
+        self.pc += 1
+        sys.exit(0)
 
     def run(self):
         """Run the CPU."""
         running = True
         while running:
-            ir = self.ram[self.pc]  # instruction register, copy
+            ir = self.ram_read(self.pc)  # instruction register, copy
             # print(f"pc-{self.pc} ir-{ir}")
 
-            def LDIf():
-                self.mar = self.ram[self.pc+1]
-                self.mdr = self.ram[self.pc+2]
-                self.reg[self.mar] = self.mdr
-                self.pc += 3
+            # branch_table = {
+            #     ADD: self.alu,
+            #     SUB: self.alu,
+            #     MUL: self.alu,
+            #     DIV: self.alu
+            # }
 
-            def PRNf():
-                self.mar = self.ram[self.pc+1]
-                self.mdr = self.reg[self.mar]
-                print(self.mdr)
-                self.pc += 2
-
-            def HLTf():
-                self.pc += 1
-                sys.exit(0)
-
-            branch_table = {
-                LDI: LDIf,
-                PRN: PRNf,
-                HLT: HLTf,
-                ADD: self.alu,
-                SUB: self.alu,
-                MUL: self.alu,
-                DIV: self.alu
-            }
-
-            if ir in branch_table:
-                branch_table[ir]()
+            if ir in self.dispatch_table:
+                self.dispatch_table[ir]()
+            elif ir in [ADD, SUB, MUL, DIV]:
+                print(ir, True)
             else:
                 print(cpu.reg)
 
