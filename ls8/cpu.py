@@ -2,6 +2,7 @@
 
 import sys
 import glob
+# from pynput.keyboard import keyboard
 
 # path = './'
 
@@ -15,6 +16,8 @@ PRN = 0b01000111  # print(reg)
 HLT = 0b00000001  # halt
 PUSH = 0b01000101
 POP = 0b01000110
+CALL = 0b01010000
+RET = 0b00010001
 
 ADD = 0b10100000
 SUB = 0b10100001
@@ -38,6 +41,16 @@ class CPU:
         self.mar = None  # Memory address register where reading/writing
         self.mdr = None  # Memory Data Register holds value to write/read
         self.fl = []  # holds current flags
+        """Interput Vector Table"""
+        self.ram[int("FF", 16)] = "I7"
+        self.ram[int("FE", 16)] = "I6"
+        self.ram[int("FD", 16)] = "I5"
+        self.ram[int("FC", 16)] = "I4"
+        self.ram[int("FB", 16)] = "I3"
+        self.ram[int("FA", 16)] = "I2"
+        self.ram[int("F9", 16)] = "I1"
+        self.ram[int("F8", 16)] = "I0"
+        """Interput Vector Table"""
         self.dispatch_table = {}
         self.dispatch_table[LDI] = self.handle_LDI
         self.dispatch_table[PRN] = self.handle_PRN
@@ -48,6 +61,8 @@ class CPU:
         self.dispatch_table[DIV] = self.alu
         self.dispatch_table[PUSH] = self.handle_PUSH
         self.dispatch_table[POP] = self.handle_POP
+        self.dispatch_table[CALL] = self.handle_CALL
+        self.dispatch_table[RET] = self.handle_RET
 
     def ram_write(self, address, value):
         self.ram[address] = value
@@ -64,7 +79,8 @@ class CPU:
         basePath = './examples/'
         file = "print8.ls8"
         file = "mult.ls8"
-        # file = "stack.ls8"
+        file = "stack.ls8"
+        file = "call.ls8"
         if len(sys.argv) > 1:
             file = sys.argv[1]
         address = 0
@@ -131,12 +147,15 @@ class CPU:
         for i in range(8):
             print(" %02X" % self.reg[i], end='')
 
-    def handle_PUSH(self):
+    def handle_PUSH(self, data=None):
         self.sp -= 1
         self.mar = self.sp
-        self.mdr = self.reg[self.ram[self.pc+1]]
+        if data is None:
+            self.mdr = self.reg[self.ram[self.pc+1]]
+            self.pc += 2
+        else:
+            self.mdr = data
         self.ram[self.mar] = self.mdr
-        self.pc += 2
 
     def handle_POP(self):
         self.mar = self.ram[self.pc+1]
@@ -144,6 +163,17 @@ class CPU:
         self.reg[self.mar] = self.mdr
         self.sp += 1
         self.pc += 2
+
+    def handle_CALL(self):
+        self.handle_PUSH(self.pc+2)
+        self.mar = self.reg[self.ram[self.pc+1]]
+        # print("CALL", self.mar)
+        self.pc = self.mar
+
+    def handle_RET(self):
+        self.mar = self.ram[self.sp]
+        # print("RET", self.mar)
+        self.pc = self.mar
 
     def handle_LDI(self):
         # self.mar = self.r[self.pc+1]
@@ -155,12 +185,12 @@ class CPU:
     def handle_PRN(self):
         self.mar = self.ram_read(self.pc+1)
         self.mdr = self.reg[self.mar]
-        # print(self.mdr)
+        print(self.mdr)
         self.pc += 2
 
     def handle_HLT(self):
         self.pc += 1
-        print(self.ram_read())
+        # print(self.ram_read())
         sys.exit(0)
 
     def run(self):
@@ -170,13 +200,6 @@ class CPU:
             ir = self.ram_read(self.pc)  # instruction register, copy
             # print(f"pc-{self.pc} ir-{ir}")
 
-            # branch_table = {
-            #     ADD: self.alu,
-            #     SUB: self.alu,
-            #     MUL: self.alu,
-            #     DIV: self.alu
-            # }
-
             if ir in self.dispatch_table:
                 self.dispatch_table[ir]()
             elif ir in [ADD, SUB, MUL, DIV]:
@@ -184,10 +207,8 @@ class CPU:
                 # ? Should you have this elif or have the OPERATORS in the dispatch table?
                 self.alu()
             else:
-                print(cpu.reg)
-
                 print(
-                    f'Unknown instruction {ir} on pc-{self.pc} at address {self.mar}')
+                    f'Unknown instruction {ir} on pc-{self.pc} at address {self.mar}. registers={self.reg}')
                 sys.exit(1)
 
 
