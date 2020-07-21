@@ -80,8 +80,7 @@ instruction, the appropriate bit in the IS register will be set.
 
 Prior to instruction fetch, the following steps occur:
 
-1. The IM register is bitwise AND-ed with the IS register and the
-   results stored as `maskedInterrupts`.
+1. The IM register is bitwise AND-ed with the IS register and the results stored as `maskedInterrupts`.
 2. Each bit of `maskedInterrupts` is checked, starting from 0 and going
    up to the 7th bit, one for each interrupt.
 3. If a bit is found to be set, follow the next sequence of steps. Stop

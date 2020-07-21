@@ -11,8 +11,9 @@ import glob
 #     print(f)
 
 INC = 0b01100101  # reg += 1 (increment)
+DEC = 0b01100110  # decrement from reg
 LDI = 0b10000010  # reg = int (register immediate)
-PRN = 0b01000111  # print(reg)
+PRN = 0b01000111  # print
 HLT = 0b00000001  # halt
 PUSH = 0b01000101
 POP = 0b01000110
@@ -23,6 +24,7 @@ ADD = 0b10100000
 SUB = 0b10100001
 MUL = 0b10100010
 DIV = 0b10100011
+AND = 0b10101000
 CMP = 0b10100111
 
 
@@ -82,9 +84,9 @@ class CPU:
         """Load a program into memory."""
         basePath = './examples/'
         file = "print8.ls8"
-        file = "mult.ls8"
-        file = "stack.ls8"
-        file = "call.ls8"
+        # file = "mult.ls8"
+        # file = "stack.ls8"
+        # file = "call.ls8"
         if len(sys.argv) > 1:
             file = sys.argv[1]
         address = 0
@@ -129,11 +131,17 @@ class CPU:
         def DIV_handler():
             self.reg[reg_a] /= self.reg[reg_b]
 
+        def AND_handler():
+            for bit in range(len(self.reg[reg_a])):
+                if self.reg[reg_a][bit] != self.reg[reg_b][bit]:
+                    self.reg[reg_a][bit] = 0
+
         branch_table = {
             ADD: ADD_handler,
             SUB: SUB_handler,
             MUL: MUL_handler,
-            DIV: DIV_handler
+            DIV: DIV_handler,
+            AND: AND_handler
         }
 
         if op in branch_table:
@@ -148,14 +156,13 @@ class CPU:
         Handy function to print out the CPU state. You might want to call this
         from run() if you need help debugging.
         """
-
         print(f"TRACE: %02X | %02X %02X %02X |" % (
             self.pc,
             # self.fl,
             # self.ie,
-            # * self.ram_read(self.pc),
-            # * self.ram_read(self.pc + 1),
-            # * self.ram_read(self.pc + 2)
+            self.ram_read(self.pc),
+            self.ram_read(self.pc + 1),
+            self.ram_read(self.pc + 2)
         ), end='')
 
         for i in range(8):
@@ -181,16 +188,13 @@ class CPU:
     def handle_CALL(self):
         self.handle_PUSH(self.pc+2)
         self.mar = self.reg[self.ram[self.pc+1]]
-        # print("CALL", self.mar)
         self.pc = self.mar
 
     def handle_RET(self):
         self.mar = self.ram[self.sp]
-        # print("RET", self.mar)
         self.pc = self.mar
 
     def handle_LDI(self):
-        # self.mar = self.r[self.pc+1]
         self.mar = self.ram_read(self.pc+1)
         self.mdr = self.ram_read(self.pc+2)
         self.reg[self.mar] = self.mdr
@@ -212,14 +216,19 @@ class CPU:
         running = True
         while running:
             ir = self.ram_read(self.pc)  # instruction register, copy
-            # print(f"pc-{self.pc} ir-{ir}")
+            # print(f"pc-{self.pc} ir-{ir} {ir[:1]}")
+
+            # if self.pc > 25:
+            #     self.reg[6] = 1
+            # if self.reg[6] == 1:
+            #     print("INTERUPT")
+            #     break
 
             if ir in self.dispatch_table:
                 self.dispatch_table[ir]()
-            elif ir in [ADD, SUB, MUL, DIV]:
-                print(ir, True)
-                # ? Should you have this elif or have the OPERATORS in the dispatch table?
-                self.alu()
+            # elif int(ir, 2)[2] == 1:
+                # self.alu()
+
             else:
                 print(
                     f'Unknown instruction {ir} on pc-{self.pc} at address {self.mar}. registers={self.reg}')
@@ -227,9 +236,18 @@ class CPU:
 
 
 cpu = CPU()
-cpu.load()
-# print(cpu.sp)
-# cpu.sp -= 1
-# print(cpu.sp)
-cpu.run()
+# cpu.load()
+# cpu.run()
 # print(cpu.ram_read())
+
+# if int(ir, 2)[2] == 1:
+#     self.alu()
+
+# for bit in range(8):
+#     if self.reg[reg_a][bit] != self.reg[reg_b][bit]:
+#         self.reg[reg_a][bit] = 0
+
+# 0b10101010
+# 0b00001111
+# ----------
+# 0b00001010
