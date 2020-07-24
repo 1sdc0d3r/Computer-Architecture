@@ -19,13 +19,22 @@ PUSH = 0b01000101
 POP = 0b01000110
 CALL = 0b01010000
 RET = 0b00010001
+JMP = 0b01010100  # jump pc to register
+JEQ = 0b01010101  # JMP if equal flag is set
+JNE = 0b01010110  # JMP if equal flag is not set
 
 ADD = 0b10100000
 SUB = 0b10100001
 MUL = 0b10100010
 DIV = 0b10100011
+CMP = 0b10100111  # compare and set flags
 AND = 0b10101000
-CMP = 0b10100111
+OR = 0b10101010
+XOR = 0b10101011
+NOT = 0b01101001
+SHL = 0b10101100  # shift left
+SHR = 0b10101101  # shift right
+MOD = 0b10100100  # modulo
 
 
 class CPU:
@@ -65,10 +74,21 @@ class CPU:
         self.dispatch_table[SUB] = self.alu
         self.dispatch_table[MUL] = self.alu
         self.dispatch_table[DIV] = self.alu
+        self.dispatch_table[CMP] = self.alu
+        self.dispatch_table[AND] = self.alu
+        self.dispatch_table[OR] = self.alu
+        self.dispatch_table[XOR] = self.alu
+        self.dispatch_table[NOT] = self.alu
+        self.dispatch_table[SHL] = self.alu
+        self.dispatch_table[SHR] = self.alu
+        self.dispatch_table[MOD] = self.alu
         self.dispatch_table[PUSH] = self.handle_PUSH
         self.dispatch_table[POP] = self.handle_POP
         self.dispatch_table[CALL] = self.handle_CALL
         self.dispatch_table[RET] = self.handle_RET
+        self.dispatch_table[JMP] = self.handle_JMP
+        self.dispatch_table[JEQ] = self.handle_JEQ
+        self.dispatch_table[JNE] = self.handle_JNE
 
     def ram_write(self, address, value):
         self.ram[address] = value
@@ -87,6 +107,7 @@ class CPU:
         # file = "mult.ls8"
         # file = "stack.ls8"
         # file = "call.ls8"
+        file = "sctest.ls8"
         if len(sys.argv) > 1:
             file = sys.argv[1]
         address = 0
@@ -106,42 +127,72 @@ class CPU:
     def alu(self, op=None, reg_a=None, reg_b=None):
         """ALU operations."""
         op = self.ram_read(self.pc)
-        reg_a = self.ram_read(self.pc + 1)
-        reg_b = self.ram_read(self.pc + 2)
+        reg_a = self.reg[self.ram_read(self.pc + 1)]
+        reg_b = self.reg[self.ram_read(self.pc + 2)]
 
-        self.fl["L"] = 0
-        self.fl["E"] = 0
-        self.fl["G"] = 0
-        if reg_a < reg_b:
-            self.fl["L"] = 1
-        elif reg_a == reg_b:
-            self.fl["E"] = 1
-        else:
-            self.fl["G"] = 1
+        def CMP_handler():
+            self.fl["L"] = 0
+            self.fl["E"] = 0
+            self.fl["G"] = 0
+            if reg_a < reg_b:
+                self.fl["L"] = 1
+            elif reg_a == reg_b:
+                self.fl["E"] = 1
+            else:
+                self.fl["G"] = 1
 
         def ADD_handler():
-            self.reg[reg_a] += self.reg[reg_b]
+            reg_a += reg_b
 
         def SUB_handler():
-            self.reg[reg_a] -= self.reg[reg_b]
+            reg_a -= reg_b
 
         def MUL_handler():
-            self.reg[reg_a] *= self.reg[reg_b]
+            reg_a *= reg_b
 
         def DIV_handler():
-            self.reg[reg_a] /= self.reg[reg_b]
+            reg_a /= reg_b
 
         def AND_handler():
-            for bit in range(len(self.reg[reg_a])):
-                if self.reg[reg_a][bit] != self.reg[reg_b][bit]:
-                    self.reg[reg_a][bit] = 0
+            reg_a = reg_a & reg_b
+
+        def OR_handler():
+            reg_a = reg_a | reg_b
+
+        def XOR_handler():
+            reg_a = reg_a ^ reg_b
+
+        def NOT_handler():
+            # ? WHY NONETYPE??
+            reg_a = ~reg_a
+
+        def SHL_handler():
+            reg_a = reg_a << reg_b
+
+        def SHR_handler():
+            reg_a = reg_a >> reg_b
+
+        def MOD_handler():
+            if reg_b == 0:
+                print("The world just exploded! You can't divide by 0...")
+                self.handle_HLT()
+            else:
+                reg_a = reg_a % reg_b
 
         branch_table = {
             ADD: ADD_handler,
             SUB: SUB_handler,
             MUL: MUL_handler,
             DIV: DIV_handler,
-            AND: AND_handler
+            CMP: CMP_handler,
+            AND: AND_handler,
+            OR: OR_handler,
+            XOR: XOR_handler,
+            NOT: NOT_handler,
+            SHL: SHL_handler,
+            SHR: SHR_handler,
+            MOD: MOD_handler,
+
         }
 
         if op in branch_table:
@@ -168,6 +219,11 @@ class CPU:
         for i in range(8):
             print(" %02X" % self.reg[i], end='')
 
+    def handle_INC(self):
+        self.mar = self.ram[self.pc+1]
+        self.reg[self.mar] = self.reg[self.mar] + 1
+        self.pc += 2
+
     def handle_PUSH(self, data=None):
         self.sp -= 1
         self.mar = self.sp
@@ -193,6 +249,22 @@ class CPU:
     def handle_RET(self):
         self.mar = self.ram[self.sp]
         self.pc = self.mar
+
+    def handle_JMP(self):
+        self.mar = self.ram[self.pc+1]
+        self.pc = self.reg[self.mar]
+
+    def handle_JEQ(self):
+        if self.fl["E"] == 1:
+            self.handle_JMP()
+        else:
+            self.pc += 2
+
+    def handle_JNE(self):
+        if self.fl["E"] == 0:
+            self.handle_JMP()
+        else:
+            self.pc += 2
 
     def handle_LDI(self):
         self.mar = self.ram_read(self.pc+1)
@@ -225,13 +297,14 @@ class CPU:
             #     break
 
             if ir in self.dispatch_table:
+                # print(bin(ir))
                 self.dispatch_table[ir]()
             # elif int(ir, 2)[2] == 1:
                 # self.alu()
 
             else:
                 print(
-                    f'Unknown instruction {ir} on pc-{self.pc} at address {self.mar}. registers={self.reg}')
+                    f'Unknown instruction {ir}({bin(ir)}) on pc-{self.pc} at address {self.mar}. registers={self.reg}')
                 sys.exit(1)
 
 
@@ -240,14 +313,22 @@ cpu = CPU()
 # cpu.run()
 # print(cpu.ram_read())
 
-# if int(ir, 2)[2] == 1:
-#     self.alu()
 
-# for bit in range(8):
-#     if self.reg[reg_a][bit] != self.reg[reg_b][bit]:
-#         self.reg[reg_a][bit] = 0
-
-# 0b10101010
-# 0b00001111
+bit1 = 0b10101010
+bit2 = 0b00001111
+bit3 = 10
+bit4 = 3
 # ----------
 # 0b00001010
+#    `MOD`
+
+
+def OR_handler():
+    print("OR")
+
+
+def AND_handler(bit1, bit2, bit3, bit4):
+    return ~bit3
+
+
+print(AND_handler(bit1, bit2, bit3, bit4))
